@@ -1,0 +1,56 @@
+What is declarative configuration in Kubernetes?	You describe the <b>desired state</b> in YAML and controllers reconcile the cluster to match it. Applied with <code>kubectl apply -f</code>.	CKA::workloads
+<code>kubectl apply</code> vs <code>kubectl create</code>?	<code>create</code> is imperative and fails if the resource exists.<br><code>apply</code> is declarative: it creates or updates, and is idempotent.	CKA::workloads
+What are <code>spec</code> and <code>status</code> in a Kubernetes object?	<code>spec</code> = desired state (you write it).<br><code>status</code> = current state (Kubernetes writes it). Controllers reconcile the two.	CKA::workloads
+How do you preview what <code>apply</code> would change?	<code>kubectl diff -f file.yaml</code>	CKA::workloads
+How do you generate YAML without creating the resource?	<code>kubectl create deploy web --image=nginx --dry-run=client -o yaml &gt; web.yaml</code>	CKA::exam-tips
+Command to look up fields of a resource spec from the CLI?	<code>kubectl explain pod.spec.containers</code> (add <code>--recursive</code> for the full tree)	CKA::exam-tips
+What is CNI?	Container Network Interface: a standard for how the container runtime sets up pod networking. Kubernetes delegates pod networking to a CNI plugin.	CKA::networking
+Where are CNI configs and binaries on a node?	Config: <code>/etc/cni/net.d/</code><br>Binaries: <code>/opt/cni/bin/</code>	CKA::networking
+After <code>kubeadm init</code> with no CNI installed, what do you see?	Nodes <code>NotReady</code>; CoreDNS pods <code>Pending</code>. Fix: install a CNI plugin.	CKA::networking
+Which common CNI does NOT enforce NetworkPolicies?	<b>Flannel</b>. Calico and Cilium do. NetworkPolicy objects can be created anyway but have no effect without a supporting CNI.	CKA::networking
+Three Kubernetes network model rules?	1. Every pod has its own unique IP.<br>2. Pods can reach all other pods without NAT.<br>3. Node agents can reach all pods on that node.	CKA::networking
+Role of kube-proxy?	Implements Services on each node (virtual IP routing/load balancing via iptables or IPVS). It is not the CNI.	CKA::networking
+Control plane components?	kube-apiserver, etcd, kube-scheduler, kube-controller-manager (and cloud-controller-manager if used).	CKA::cluster-architecture
+Node components?	kubelet, kube-proxy, container runtime (containerd / CRI-O).	CKA::cluster-architecture
+Which component assigns pods to nodes?	kube-scheduler. The kubelet then runs the pod on that node via the container runtime (CRI).	CKA::cluster-architecture
+etcd backup command?	<code>ETCDCTL_API=3 etcdctl snapshot save /tmp/snap.db \<br>--endpoints=https://127.0.0.1:2379 \<br>--cacert=/etc/kubernetes/pki/etcd/ca.crt \<br>--cert=/etc/kubernetes/pki/etcd/server.crt \<br>--key=/etc/kubernetes/pki/etcd/server.key</code>	CKA::cluster-architecture
+etcd restore steps?	1. <code>etcdutl snapshot restore /tmp/snap.db --data-dir /var/lib/etcd-restore</code><br>2. Edit <code>/etc/kubernetes/manifests/etcd.yaml</code>: change the etcd-data hostPath to the new dir.<br>3. Wait for the static pod to restart.	CKA::cluster-architecture
+Where do static pod manifests live?	<code>/etc/kubernetes/manifests</code> (path set by <code>staticPodPath</code> in <code>/var/lib/kubelet/config.yaml</code>). The kubelet runs them directly.	CKA::cluster-architecture
+Order of a kubeadm control plane upgrade?	1. Upgrade kubeadm package<br>2. <code>kubeadm upgrade plan</code> / <code>apply vX.Y.Z</code><br>3. Drain node<br>4. Upgrade kubelet + kubectl<br>5. <code>systemctl daemon-reload; systemctl restart kubelet</code><br>6. Uncordon	CKA::cluster-architecture
+Cordon vs drain?	<code>cordon</code>: mark node unschedulable only.<br><code>drain</code>: cordon + evict pods (use <code>--ignore-daemonsets</code>, <code>--delete-emptydir-data</code> if needed). <code>uncordon</code> reverses it.	CKA::cluster-architecture
+How do you get a worker node join command?	<code>kubeadm token create --print-join-command</code> (run on the control plane)	CKA::cluster-architecture
+How do you check certificate expiry in a kubeadm cluster?	<code>kubeadm certs check-expiration</code> (renew with <code>kubeadm certs renew all</code>)	CKA::cluster-architecture
+Role vs ClusterRole?	Role: namespaced permissions. ClusterRole: cluster-wide resources (nodes, PVs) or reusable across namespaces. Bind with RoleBinding / ClusterRoleBinding.	CKA::cluster-architecture
+Imperative command to create a Role and bind it?	<code>kubectl create role r --verb=get,list --resource=pods -n ns</code><br><code>kubectl create rolebinding rb --role=r --user=jane -n ns</code>	CKA::cluster-architecture
+How do you test whether a user can do something?	<code>kubectl auth can-i delete pods --as jane -n dev</code>	CKA::cluster-architecture
+Switch kubeconfig context?	<code>kubectl config use-context NAME</code> (list: <code>kubectl config get-contexts</code>). Always do this first on each exam task.	CKA::exam-tips
+Taint a node and what are the effects?	<code>kubectl taint nodes node1 key=value:NoSchedule</code><br>Effects: NoSchedule, PreferNoSchedule, NoExecute.<br>Remove with trailing <code>-</code>.	CKA::workloads
+Taints vs tolerations?	Taints repel pods from a node; tolerations let a pod be scheduled onto tainted nodes. A toleration permits but does not force placement.	CKA::workloads
+nodeSelector vs node affinity?	nodeSelector: simple label equality match. Node affinity: richer operators, required vs preferred rules.	CKA::workloads
+What is a DaemonSet for?	Runs one pod on every (matching) node: logging agents, CNI, kube-proxy.	CKA::workloads
+Rollout commands for a Deployment?	<code>kubectl rollout status deploy/web</code><br><code>kubectl rollout history deploy/web</code><br><code>kubectl rollout undo deploy/web [--to-revision=N]</code><br><code>kubectl set image deploy/web nginx=nginx:1.27</code>	CKA::workloads
+Requests vs limits?	Requests: used by the scheduler for placement (guaranteed minimum). Limits: enforced maximum at runtime (CPU throttled, memory OOMKilled).	CKA::workloads
+Liveness vs readiness vs startup probe?	Liveness: restart container if failing.<br>Readiness: remove from Service endpoints if failing.<br>Startup: delays other probes until the app has started.	CKA::workloads
+Helm commands to install, upgrade, roll back?	<code>helm install rel repo/chart</code><br><code>helm upgrade rel repo/chart</code><br><code>helm rollback rel REVISION</code><br><code>helm list -A</code>	CKA::workloads
+How do you apply a Kustomize directory?	<code>kubectl apply -k ./dir</code> (preview with <code>kubectl kustomize ./dir</code>)	CKA::workloads
+Service types?	ClusterIP (internal, default), NodePort (port on every node), LoadBalancer (cloud LB), ExternalName (CNAME). Headless = <code>clusterIP: None</code>.	CKA::networking
+Service DNS name format?	<code>svc-name.namespace.svc.cluster.local</code>	CKA::networking
+Which component provides cluster DNS?	CoreDNS (Deployment in kube-system, config in the <code>coredns</code> ConfigMap).	CKA::networking
+Ingress vs Gateway API?	Ingress: HTTP/S routing rules, needs an ingress controller. Gateway API: newer, role-oriented successor (GatewayClass, Gateway, HTTPRoute), now on the CKA syllabus.	CKA::networking
+Default NetworkPolicy behavior?	Pods are non-isolated (all traffic allowed). Once a policy selects a pod for a direction, only traffic allowed by some policy is permitted for that direction.	CKA::networking
+YAML for a default-deny-all ingress policy?	<code>spec:<br>&nbsp;&nbsp;podSelector: {}<br>&nbsp;&nbsp;policyTypes:<br>&nbsp;&nbsp;- Ingress</code>	CKA::networking
+PV vs PVC?	PV: cluster storage resource. PVC: a pod's request for storage that binds to a matching PV.	CKA::storage
+PV access modes?	RWO (one node read-write), ROX (many nodes read-only), RWX (many nodes read-write), RWOP (one pod read-write).	CKA::storage
+PV reclaim policies?	Retain (keep data, manual cleanup), Delete (delete the volume with the PVC). Recycle is deprecated.	CKA::storage
+What does a StorageClass do?	Defines a provisioner and parameters so PVs are created dynamically when a PVC requests that class. One can be marked default.	CKA::storage
+Troubleshooting routine?	Status, then logs, then fix, then <b>verify</b>. The grader checks cluster state.	CKA::troubleshooting
+Node is NotReady. First checks?	<code>kubectl describe node</code>; on the node: <code>systemctl status kubelet</code>, <code>journalctl -u kubelet</code>, container runtime status, CNI present, certs valid.	CKA::troubleshooting
+Pod stuck in Pending: common causes?	Insufficient resources, untolerated taints, nodeSelector/affinity mismatch, unbound PVC, no schedulable nodes. Check <code>kubectl describe pod</code> events.	CKA::troubleshooting
+CrashLoopBackOff: how to investigate?	<code>kubectl logs POD --previous</code>, <code>kubectl describe pod</code> (exit code, OOMKilled, probe failures), check command/args and config.	CKA::troubleshooting
+ImagePullBackOff causes?	Wrong image name or tag, private registry without imagePullSecret, registry unreachable.	CKA::troubleshooting
+Control plane pod is down. Where to look?	Static pod manifests in <code>/etc/kubernetes/manifests</code>, <code>crictl ps -a</code> and <code>crictl logs ID</code>, <code>journalctl -u kubelet</code>.	CKA::troubleshooting
+Service has no endpoints. Why?	Selector doesn't match pod labels, or pods aren't Ready. Check <code>kubectl get endpoints svc</code> and <code>kubectl get pods --show-labels</code>.	CKA::troubleshooting
+Inspect containers on a node without kubectl?	<code>crictl ps</code>, <code>crictl logs</code>, <code>crictl pods</code>	CKA::troubleshooting
+CKA exam format?	Performance-based, 2 hours, about 15-20 tasks, 66% to pass, docs allowed. Verify current details on the CNCF site.	CKA::exam-tips
+CKA domain weights?	Troubleshooting 30%, Cluster Architecture 25%, Services &amp; Networking 20%, Workloads &amp; Scheduling 15%, Storage 10%.	CKA::exam-tips
+Exam shell setup at the start?	<code>alias k=kubectl</code><br><code>export do='--dry-run=client -o yaml'</code><br><code>source &lt;(kubectl completion bash)</code> and <code>complete -F __start_kubectl k</code>	CKA::exam-tips
